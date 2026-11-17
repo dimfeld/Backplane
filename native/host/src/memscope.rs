@@ -116,7 +116,10 @@ pub fn spawn(wrap: Option<Vec<String>>, ev: Evidence, mut make: impl FnMut(Optio
     let went = crate::scopeprobe::wait_exec(pid, || match child.try_wait() { Ok(Some(s)) => { code = s.code(); true } Ok(None) => false, Err(_) => true }, std::time::Duration::from_secs(3));
     if went != crate::scopeprobe::Launch::Failed || code != Some(1) { return Ok(child) }
     let said = match ev {
+        #[cfg(target_os = "linux")]
         Evidence::Stderr => match child.stderr.take() { Some(e) => { let (b, back) = take_back(e); child.stderr = back; String::from_utf8_lossy(&b).into_owned() } None => String::new() },
+        #[cfg(not(target_os = "linux"))]
+        Evidence::Stderr => String::new(),
         Evidence::File(p) => std::fs::read_to_string(p).unwrap_or_default(),
         Evidence::Assume => "Failed to start transient scope (systemd-run exited 1)".into(),
     };
@@ -125,6 +128,7 @@ pub fn spawn(wrap: Option<Vec<String>>, ev: Evidence, mut make: impl FnMut(Optio
     make(None).spawn()
 }
 /// What an exited child wrote to its stderr pipe, and a pipe that gives the same bytes again to whoever reads it next.
+#[cfg(target_os = "linux")]
 fn take_back(e: tokio::process::ChildStderr) -> (Vec<u8>, Option<tokio::process::ChildStderr>) {
     use std::io::{Read, Write};
     let Ok(fd) = e.into_owned_fd() else { return (vec![], None) };
