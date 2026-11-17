@@ -14,3 +14,4 @@ native/gpui/target/
 native/voice/target/
 .lowmem/
 .bp-keep
+*.bun-build
