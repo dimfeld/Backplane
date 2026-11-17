@@ -2,15 +2,12 @@
 
 > Paths under `src/` below (`src/core`, `src/server`, `src/web`, `src/mobile`, `src/app`) name the Bend JS tree, removed from this checkout (tag `main-bend-final`). Where the current Rust code for each is, is unverified; look under `native/host/src/` and `native/gpui/`.
 
-The Electron desktop opens a floating interactive PTY with the Terminal
-button, the unmodified backtick key, `Ctrl+J`, or `Super+grave` / `Super+~` while
-Backplane has focus. Plain backtick toggles from the workspace or composer
-and is consumed there; holding it does not toggle repeatedly. In the PTY
-and other text fields, backtick types normally; use `Ctrl+J` to toggle there.
-Shifted tilde and IME composition keep their normal input behavior.
-The Linux desktop/compositor may reserve the Super chord; Backplane does
-not change system shortcuts. Commands → Floating terminal here is the
-same action. The panel displays its thread and working directory, stays
+The desktop app opens a floating terminal with the Terminal button,
+Control–backtick, or the shortcut in Settings → Shortcuts. That shortcut
+defaults to Command–J on macOS and Control–J on Linux and Windows.
+Plain backtick is available for typing in the composer and the shell.
+Linux and Windows also support Super–backtick if the desktop passes it to Backplane.
+The panel displays its thread and working directory, stays
 attached to that shell while navigating, and can be moved and resized.
 Hide preserves the shell; `exit` ends it. Reopening from the same thread
 reuses a running shell; opening from another thread uses that thread's

@@ -27,8 +27,7 @@ actions!(keys, [NewThread, OpenDiff, OpenFiles, StopTurn, ModelPicker, PrevThrea
 /* i18n-ok: key contexts, and the table's words are drawn by Settings through trs */ const NOT_MAC_COMPOSER: &str = "!Composer && !TextInput && !PickInput && !FindInput && !AskInput && !ImpInput";
 /// Where Esc is the field's or the page's own: the viewer does not shut under it.
 /* i18n-ok: key contexts, and the table's words are drawn by Settings through trs */ const ESC_OWNERS: [&str; 10] = ["TextInput", "PickInput", "FindInput", "AskInput", "ImpInput", "Terminal", "BrowserBar", "BrowserView", "CefBar", "CefPage"];
-/// Where a bare backtick shows the terminal: the message box, or nowhere that types (a shell, another field and a viewer keep their backticks).
-/* i18n-ok: key contexts, and the table's words are drawn by Settings through trs */ const TERM_BARE: &str = "Composer || (!TextInput && !PickInput && !FindInput && !AskInput && !ImpInput && !Viewer && !BrowserBar && !FilesPage && !Terminal)";
+/* i18n-ok: gpui keystroke */ const TERM_BACKTICK: &str = "ctrl-`";
 /// Where Ctrl+H is the viewer's: everywhere but the small fields, the terminal and web pages, whose own it stays (it deletes a character in many fields and in a shell, and opens a web page's history).
 /// The composer is included, as in the old client: the board beside it answers without a click on the canvas. With no plot on show the key goes on to the composer (`key_layers`).
 /// Ctrl+L to the message box: everywhere but the shell (its Ctrl+L clears the screen) and the Browser page (its address bar)
@@ -83,7 +82,7 @@ pub const TABLE: &[Entry] = &[
     /* i18n-ok: key contexts, and the table's words are drawn by Settings through trs */ e("pad-delete", "Delete the selection, or clear the pad", "Drawing pad", "delete", Fixed),
     /* i18n-ok: key contexts, and the table's words are drawn by Settings through trs */ e("pad-delete-alt", "Delete (also)", "Drawing pad", "backspace", Fixed),
     /* i18n-ok: key contexts, and the table's words are drawn by Settings through trs */ e("term", "Show or hide the floating terminal", "Terminal", "secondary-j", Rebind),
-    /* i18n-ok: key contexts, and the table's words are drawn by Settings through trs */ e("term-alt", "Show the floating terminal (also)", "Terminal", "`", Fixed),
+    /* i18n-ok: key contexts, and the table's words are drawn by Settings through trs */ e("term-alt", "Show the floating terminal (also)", "Terminal", TERM_BACKTICK, Fixed),
     /* i18n-ok: key contexts, and the table's words are drawn by Settings through trs */ e("term-super", "Show or hide the floating terminal (also, not on a Mac)", "Terminal", "super-`", Fixed),
     /* i18n-ok: key contexts, and the table's words are drawn by Settings through trs */ e("term-leave", "Leave the terminal: put it away, or take the keyboard back to it", "Terminal", "shift-escape", Fixed),
     /* i18n-ok: key contexts, and the table's words are drawn by Settings through trs */ e("term-copy", "Copy the terminal's selection", "Terminal", "secondary-shift-c", Fixed),
@@ -169,7 +168,7 @@ pub fn bindings(l: &Local) -> Vec<KeyBinding> {
         KeyBinding::new(&k("uber"), UberChat, None), KeyBinding::new(&k("always"), AlwaysOn, None), KeyBinding::new(&k("settle"), SettleThread, None), KeyBinding::new(&k("layers"), CycleLayers, Some(NOT_FIELD)), KeyBinding::new(&k("perf"), PerfOverlay, None),
         KeyBinding::new("/", FocusComposer, Some(SLASH)), KeyBinding::new(&k("focus-key"), FocusComposer, Some(NOT_SHELL)), KeyBinding::new(&k("find"), crate::FindInThreadKey, Some(NOT_SHELL)),
         KeyBinding::new("?", ShowKeys, Some(FREE)), KeyBinding::new("shift-/", ShowKeys, Some(FREE)), KeyBinding::new("shift-?", ShowKeys, Some(FREE)), KeyBinding::new("f1", ShowKeys, None),
-        KeyBinding::new("ctrl-;", CommentKicad, None), KeyBinding::new(&k("term"), ToggleTerminal, None), KeyBinding::new("`", ToggleTerminal, Some(TERM_BARE)), KeyBinding::new("shift-escape", DismissTerminal, None)]);
+        KeyBinding::new("ctrl-;", CommentKicad, None), KeyBinding::new(&k("term"), ToggleTerminal, None), KeyBinding::new(TERM_BACKTICK, ToggleTerminal, None), KeyBinding::new("shift-escape", DismissTerminal, None)]);
     // Super+` (off a Mac: Cmd+` there goes from window to window) toggles the terminal too, from the shell as well, as in the old client
     if !mac() { v.push(KeyBinding::new("super-`", ToggleTerminal, None)); }
     // Shift with a symbol arrives as the shifted symbol and no Shift (Ctrl+Shift+] is "ctrl-}" from Linux): the chords that hold one are bound that way too
@@ -211,7 +210,7 @@ fn term_bindings(all: &[KeyBinding], toggle: &str) -> Vec<KeyBinding> {
     use crate::screens::term::{Copy, Paste};
     let mut v = vec![KeyBinding::new("secondary-shift-c", Copy, Some("Terminal")), KeyBinding::new("secondary-shift-v", Paste, Some("Terminal"))];
     if mac() { v.extend([KeyBinding::new("cmd-c", Copy, Some("Terminal")), KeyBinding::new("cmd-v", Paste, Some("Terminal"))]); }
-    let own: Vec<String> = [toggle, "shift-escape", "secondary-shift-c", "secondary-shift-v", "super-`"].iter().chain(if mac() { &["cmd-c", "cmd-v"][..] } else { &[][..] })
+    let own: Vec<String> = [toggle, TERM_BACKTICK, "shift-escape", "secondary-shift-c", "secondary-shift-v", "super-`"].iter().chain(if mac() { &["cmd-c", "cmd-v"][..] } else { &[][..] })
         .filter_map(|k| Keystroke::parse(k).ok()).map(|k| k.unparse()).collect();
     let mut seen = std::collections::HashSet::new();
     for key in all.iter().filter_map(|b| b.keystrokes().first().map(|k| k.unparse())) {
@@ -553,10 +552,12 @@ mod tests {
         for ctx in [&[][..], &["Composer"][..], &["TextInput"][..], &["PickInput"][..], &["Viewer"][..], &["Terminal"][..]] { assert_eq!(d("ctrl-j", ctx), "keys::ToggleTerminal", "{ctx:?}"); }
         assert_eq!(d("ctrl-j", &["DrawPad"]), "", "nothing behind the pad moves");
     }
-    #[test] fn a_bare_backtick_shows_the_terminal_but_stays_typed_in_fields_and_the_shell() {
-        assert_eq!(d("`", &[]), "keys::ToggleTerminal"); assert_eq!(d("`", &["Composer"]), "keys::ToggleTerminal", "from the message box, as the old client");
-        for c in ["Terminal", "TextInput", "PickInput", "AskInput", "ImpInput", "Viewer", "BrowserBar", "FilesPage", "DrawPad"] { assert_eq!(d("`", &[c]), "", "{c} keeps its backtick"); }
-        assert_eq!(d("`", &["DrawPad", "PadLength"]), "");
+    #[test] fn the_terminal_shortcut_requires_control_with_backtick() {
+        for ctx in [&[][..], &["Composer"][..], &["TextInput"][..], &["Viewer"][..], &["Terminal"][..]] {
+            assert_eq!(d("`", ctx), "", "{ctx:?} keeps plain backtick");
+            assert_eq!(d("ctrl-`", ctx), "keys::ToggleTerminal", "{ctx:?}");
+        }
+        assert_eq!(d("ctrl-`", &["DrawPad", "PadLength"]), "");
     }
     #[test] fn shift_escape_leaves_the_terminal_and_plain_escape_is_the_shells() {
         for ctx in [&[][..], &["Composer"][..], &["Terminal"][..]] { assert_eq!(d("shift-escape", ctx), "keys::DismissTerminal", "{ctx:?}"); }

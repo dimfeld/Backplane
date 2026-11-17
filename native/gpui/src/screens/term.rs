@@ -1,5 +1,5 @@
 //! The floating terminal: the open thread's shell (the hub's `term.open`, in the thread's worktree or project folder) in a panel over the page.
-//! Ctrl+J or a bare backtick shows it and gives it the keyboard; pressed again with the keyboard in it they put it away, and with the keyboard
+//! The terminal shortcut or Ctrl+backtick shows it and gives it the keyboard; pressed again with the keyboard in it they put it away, and with the keyboard
 //! elsewhere they bring the keyboard back to it. Shift+Esc in it puts it away and the message box has the keyboard again; outside it, Shift+Esc
 //! gives the keyboard back to it. Ctrl+Shift+C copies what the mouse selected, Ctrl+Shift+V pastes. Every other key is the shell's (keys.rs mutes
 //! the client's shortcuts in the `Terminal` context, so Ctrl+C, Ctrl+K, Esc and a backtick reach the program).
@@ -60,7 +60,7 @@ pub struct Term {
     pub card_focused: Option<String>,
 }
 
-/// What Ctrl+J (or a backtick) does now.
+/// What the terminal toggle does now.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Toggle { Show, Focus, Hide }
 pub fn toggle(open: bool, focused: bool) -> Toggle { match (open, focused) { (false, _) => Toggle::Show, (true, false) => Toggle::Focus, (true, true) => Toggle::Hide } }
@@ -248,7 +248,7 @@ impl Backplane {
     fn term_act(&mut self, what: Toggle, window: &mut Window, cx: &mut Context<Self>) {
         match what { Toggle::Show => self.term_show(window, cx), Toggle::Focus => { self.screens.term.take_keys(window); cx.notify(); } Toggle::Hide => { self.term_hide(cx); } }
     }
-    /// Ctrl+J, a backtick, the rail's Terminal button.
+    /// The terminal shortcut or the rail’s Terminal button.
     pub(crate) fn term_toggle(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let t = &self.screens.term; let what = toggle(t.open, t.focused(window)); self.term_act(what, window, cx);
     }
