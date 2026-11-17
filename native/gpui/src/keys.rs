@@ -507,6 +507,25 @@ mod tests {
             let a = d(k, &["Composer"]); assert!(a.starts_with("composer::"), "{k} must stay the composer's, got {a}");
         }
     }
+    #[test] fn horizontal_editing_uses_mac_modifiers() {
+        if !mac() {
+            assert_eq!(d("ctrl-left", &["Composer"]), "composer::WordLeft");
+            assert_eq!(d("ctrl-shift-right", &["Composer"]), "composer::SelWordRight");
+            return;
+        }
+        for (key, action) in [
+            ("alt-left", "WordLeft"), ("alt-right", "WordRight"),
+            ("alt-shift-left", "SelWordLeft"), ("alt-shift-right", "SelWordRight"),
+            ("cmd-left", "Home"), ("cmd-right", "End"),
+            ("cmd-shift-left", "SelHome"), ("cmd-shift-right", "SelEnd"),
+        ] {
+            for context in ["Composer", "AskInput", "ImpInput", "PickInput", "FindInput", "PadLength"] {
+                assert_eq!(d(key, &[context]), format!("composer::{action}"), "{key} in {context}");
+            }
+            let action = action.strip_prefix("Sel").map_or_else(|| action.to_string(), |tail| format!("Select{tail}"));
+            assert_eq!(d(key, &["TextInput"]), format!("text_input::{action}"), "{key} in TextInput");
+        }
+    }
     #[test] fn timeline_scope_bare_keys_act_only_outside_fields_and_viewers() {
         assert_eq!(d("/", &[]), "keys::FocusComposer"); assert_eq!(d("b", &[]), "keys::RailBoard"); assert_eq!(d("3", &[]), "keys::Rail3d"); assert_eq!(d("d", &[]), "keys::RailDiff");
         for c in ["Composer", "TextInput", "PickInput", "AskInput", "ImpInput", "Viewer", "BrowserBar", "FilesPage"] { for k in ["/", "b", "s", "3", "v", "m", "f", "d", "r", "w"] { if k == "/" && c == "Viewer" { continue } assert_eq!(d(k, &[c]), "", "{k} in {c}"); } }

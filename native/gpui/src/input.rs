@@ -12,6 +12,8 @@ use gpui::{
 };
 use unicode_segmentation::*;
 
+use crate::screens::edit::{word_end, word_start};
+
 actions!(
     text_input,
     [
@@ -24,6 +26,12 @@ actions!(
         SelectAll,
         Home,
         End,
+        SelectHome,
+        SelectEnd,
+        WordLeft,
+        WordRight,
+        SelectWordLeft,
+        SelectWordRight,
         ShowCharacterPalette,
         Paste,
         Cut,
@@ -80,6 +88,40 @@ impl TextInput {
 
     fn end(&mut self, _: &End, _: &mut Window, cx: &mut Context<Self>) {
         self.move_to(self.content.len(), cx);
+    }
+
+    fn select_home(&mut self, _: &SelectHome, _: &mut Window, cx: &mut Context<Self>) {
+        self.select_to(0, cx);
+    }
+
+    fn select_end(&mut self, _: &SelectEnd, _: &mut Window, cx: &mut Context<Self>) {
+        self.select_to(self.content.len(), cx);
+    }
+
+    fn word_left(&mut self, _: &WordLeft, _: &mut Window, cx: &mut Context<Self>) {
+        let offset = if self.selected_range.is_empty() {
+            word_start(&self.content, self.cursor_offset())
+        } else {
+            self.selected_range.start
+        };
+        self.move_to(offset, cx);
+    }
+
+    fn word_right(&mut self, _: &WordRight, _: &mut Window, cx: &mut Context<Self>) {
+        let offset = if self.selected_range.is_empty() {
+            word_end(&self.content, self.cursor_offset())
+        } else {
+            self.selected_range.end
+        };
+        self.move_to(offset, cx);
+    }
+
+    fn select_word_left(&mut self, _: &SelectWordLeft, _: &mut Window, cx: &mut Context<Self>) {
+        self.select_to(word_start(&self.content, self.cursor_offset()), cx);
+    }
+
+    fn select_word_right(&mut self, _: &SelectWordRight, _: &mut Window, cx: &mut Context<Self>) {
+        self.select_to(word_end(&self.content, self.cursor_offset()), cx);
     }
 
     fn backspace(&mut self, _: &Backspace, window: &mut Window, cx: &mut Context<Self>) {
@@ -581,6 +623,12 @@ impl Render for TextInput {
             .on_action(cx.listener(Self::select_all))
             .on_action(cx.listener(Self::home))
             .on_action(cx.listener(Self::end))
+            .on_action(cx.listener(Self::select_home))
+            .on_action(cx.listener(Self::select_end))
+            .on_action(cx.listener(Self::word_left))
+            .on_action(cx.listener(Self::word_right))
+            .on_action(cx.listener(Self::select_word_left))
+            .on_action(cx.listener(Self::select_word_right))
             .on_action(cx.listener(Self::show_character_palette))
             .on_action(cx.listener(Self::paste))
             .on_action(cx.listener(Self::cut))
@@ -622,7 +670,7 @@ impl TextInput {
 }
 pub fn bind(cx: &mut App) { cx.bind_keys(bindings()); }
 pub fn bindings() -> Vec<KeyBinding> {
-    vec![
+    let mut v = vec![
         KeyBinding::new("backspace", Backspace, Some("TextInput")),
         KeyBinding::new("delete", Delete, Some("TextInput")),
         KeyBinding::new("left", Left, Some("TextInput")),
@@ -635,5 +683,19 @@ pub fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new("ctrl-x", Cut, Some("TextInput")),
         KeyBinding::new("home", Home, Some("TextInput")),
         KeyBinding::new("end", End, Some("TextInput")),
-    ]
+    ];
+    if crate::keys::mac() {
+        /* i18n-ok: gpui keystrokes and context */ let c = Some("TextInput");
+        v.extend([
+            KeyBinding::new("cmd-left", Home, c),
+            KeyBinding::new("cmd-right", End, c),
+            KeyBinding::new("cmd-shift-left", SelectHome, c),
+            KeyBinding::new("cmd-shift-right", SelectEnd, c),
+            KeyBinding::new("alt-left", WordLeft, c),
+            KeyBinding::new("alt-right", WordRight, c),
+            KeyBinding::new("alt-shift-left", SelectWordLeft, c),
+            KeyBinding::new("alt-shift-right", SelectWordRight, c),
+        ]);
+    }
+    v
 }

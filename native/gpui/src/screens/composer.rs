@@ -411,15 +411,21 @@ impl Focusable for Composer { fn focus_handle(&self, _: &App) -> FocusHandle { s
 pub fn bind(cx: &mut App) { cx.bind_keys(bindings()); }
 pub fn bindings() -> Vec<KeyBinding> {
     let mut v: Vec<KeyBinding> = Vec::new();
+    /* i18n-ok: gpui keystrokes */
+    let [word_left, word_right, select_word_left, select_word_right] = if crate::keys::mac() {
+        ["alt-left", "alt-right", "alt-shift-left", "alt-shift-right"]
+    } else {
+        ["secondary-left", "secondary-right", "secondary-shift-left", "secondary-shift-right"]
+    };
     /* i18n-ok: key contexts */ for ctx in ["Composer", "AskInput", "ImpInput", "PickInput", "FindInput", "PadLength"] {
     let c = Some(ctx);
     v.extend([
         KeyBinding::new("backspace", Backspace, c), KeyBinding::new("delete", Delete, c),
         KeyBinding::new("secondary-backspace", WordBackspace, c), KeyBinding::new("secondary-delete", WordDelete, c),
         KeyBinding::new("left", Left, c), KeyBinding::new("right", Right, c),
-        KeyBinding::new("secondary-left", WordLeft, c), KeyBinding::new("secondary-right", WordRight, c),
+        KeyBinding::new(word_left, WordLeft, c), KeyBinding::new(word_right, WordRight, c),
         KeyBinding::new("shift-left", SelLeft, c), KeyBinding::new("shift-right", SelRight, c),
-        KeyBinding::new("secondary-shift-left", SelWordLeft, c), KeyBinding::new("secondary-shift-right", SelWordRight, c),
+        KeyBinding::new(select_word_left, SelWordLeft, c), KeyBinding::new(select_word_right, SelWordRight, c),
         KeyBinding::new("tab", Tab, c), KeyBinding::new("up", Up, c), KeyBinding::new("down", Down, c), KeyBinding::new("shift-up", SelUp, c), KeyBinding::new("shift-down", SelDown, c),
         KeyBinding::new("home", Home, c), KeyBinding::new("end", End, c), KeyBinding::new("shift-home", SelHome, c), KeyBinding::new("shift-end", SelEnd, c),
         KeyBinding::new("secondary-home", DocStart, c), KeyBinding::new("secondary-end", DocEnd, c),
@@ -428,6 +434,12 @@ pub fn bindings() -> Vec<KeyBinding> {
         KeyBinding::new("secondary-z", Undo, c), KeyBinding::new("secondary-shift-z", Redo, c), KeyBinding::new("secondary-y", Redo, c),
         KeyBinding::new("shift-enter", Newline, c),
     ]);
+    if crate::keys::mac() {
+        /* i18n-ok: gpui keystrokes */ v.extend([
+            KeyBinding::new("cmd-left", Home, c), KeyBinding::new("cmd-right", End, c),
+            KeyBinding::new("cmd-shift-left", SelHome, c), KeyBinding::new("cmd-shift-right", SelEnd, c),
+        ]);
+    }
     }
     v.extend([KeyBinding::new("enter", Go, Some("AskInput")), KeyBinding::new("enter", Go, Some("PickInput")), KeyBinding::new("enter", Go, Some("PadLength")),
         // the find bar: Enter the next match, Shift+Enter the previous (bound after the editing keys, so it is not a new line there)

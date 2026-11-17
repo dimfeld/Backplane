@@ -20,6 +20,18 @@ pub struct Editor {
 
 const HISTORY: usize = 200;
 
+pub(crate) fn word_start(text: &str, offset: usize) -> usize {
+    text[..offset].split_word_bound_indices().rev()
+        .find(|(_, word)| word.chars().any(char::is_alphanumeric))
+        .map_or(0, |(start, _)| start)
+}
+
+pub(crate) fn word_end(text: &str, offset: usize) -> usize {
+    text[offset..].split_word_bound_indices()
+        .find(|(_, word)| word.chars().any(char::is_alphanumeric))
+        .map_or(text.len(), |(start, word)| offset + start + word.len())
+}
+
 impl Default for Editor { fn default() -> Self { Self::new("") } }
 
 impl Editor {
@@ -75,27 +87,18 @@ impl Editor {
 
     pub fn prev(&self, i: usize) -> usize { self.text[..i].grapheme_indices(true).next_back().map_or(0, |(k, _)| k) }
     pub fn next(&self, i: usize) -> usize { self.text[i..].graphemes(true).next().map_or(self.text.len(), |g| i + g.len()) }
-    pub fn word_start(&self, i: usize) -> usize {
-        let mut it = self.text[..i].split_word_bound_indices().rev().peekable();
-        while let Some((k, w)) = it.next() { if w.chars().any(char::is_alphanumeric) { return k; } if it.peek().is_none() { return 0; } }
-        0
-    }
-    pub fn word_end(&self, i: usize) -> usize {
-        for (k, w) in self.text[i..].split_word_bound_indices() { if w.chars().any(char::is_alphanumeric) { return i + k + w.len(); } }
-        self.text.len()
-    }
     pub fn line_start(&self, i: usize) -> usize { self.text[..i].rfind('\n').map_or(0, |k| k + 1) }
     pub fn line_end(&self, i: usize) -> usize { self.text[i..].find('\n').map_or(self.text.len(), |k| i + k) }
 
     fn go(&mut self, to: usize, extend: bool) { self.head = to; if !extend { self.anchor = to; } self.last = Kind::Other; }
     pub fn left(&mut self, extend: bool, word: bool) {
         if !extend && self.anchor != self.head { self.go(self.selection().start, false); return; }
-        let t = if word { self.word_start(self.head) } else { self.prev(self.head) };
+        let t = if word { word_start(&self.text, self.head) } else { self.prev(self.head) };
         self.go(t, extend);
     }
     pub fn right(&mut self, extend: bool, word: bool) {
         if !extend && self.anchor != self.head { self.go(self.selection().end, false); return; }
-        let t = if word { self.word_end(self.head) } else { self.next(self.head) };
+        let t = if word { word_end(&self.text, self.head) } else { self.next(self.head) };
         self.go(t, extend);
     }
     pub fn home(&mut self, extend: bool) { let t = self.line_start(self.head); self.go(t, extend); }
@@ -135,14 +138,14 @@ impl Editor {
         let sel = self.selection();
         if !sel.is_empty() { return self.replace(sel, "", Kind::Other); }
         if self.head == 0 { return; }
-        let from = if word { self.word_start(self.head) } else { self.prev(self.head) };
+        let from = if word { word_start(&self.text, self.head) } else { self.prev(self.head) };
         self.replace(from..self.head, "", if word { Kind::Other } else { Kind::Delete });
     }
     pub fn delete(&mut self, word: bool) {
         let sel = self.selection();
         if !sel.is_empty() { return self.replace(sel, "", Kind::Other); }
         if self.head == self.text.len() { return; }
-        let to = if word { self.word_end(self.head) } else { self.next(self.head) };
+        let to = if word { word_end(&self.text, self.head) } else { self.next(self.head) };
         self.replace(self.head..to, "", if word { Kind::Other } else { Kind::Delete });
     }
     /// An IME update: replace `range` (default: the composition, else the selection) and keep the new text
