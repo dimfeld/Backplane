@@ -21,6 +21,10 @@ on:
       broken_run:
         description: "smoke: a dry run with a newer tag than this one whose hub dies at its start: rolled back from"
         default: ""
+      personal_mac:
+        description: "Build the Apple Silicon Finder app for a side-by-side personal install"
+        type: boolean
+        default: false
       android_only:
         description: "only the Android app: the release-signed APK and AAB as the archive-android artifact, nothing else built"
         type: boolean
@@ -38,16 +42,13 @@ permissions:
 jobs:
   build:
     # a dry run of the Android app alone skips the desktop builds (publish and smoke then skip too)
-    if: ${{ !inputs.android_only }}
+    if: ${{ !inputs.android_only || inputs.personal_mac }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # the oldest runner images, so the archives run on older glibc (22.04: glibc 2.35)
-          - { target: linux-x64, os: ubuntu-22.04 }
-          - { target: linux-arm64, os: ubuntu-22.04-arm }
-          - { target: darwin-arm64, os: macos-latest }
-          - { target: windows-x64, os: windows-latest }
+        include: ${{ fromJSON(inputs.personal_mac && '[{"target":"darwin-arm64","os":"macos-latest"}]' ||
+          '[{"target":"linux-x64","os":"ubuntu-22.04"},{"target":"linux-arm64","os":"ubuntu-22.04-arm"},
+          {"target":"darwin-arm64","os":"macos-latest"},{"target":"windows-x64","os":"windows-latest"}]') }}
     name: build ${{ matrix.target }}
     # a nightly may build on faster machines, named by repo variables (unset: GitHub's): NIGHTLY_LINUX_RUNNER (Boat CI: boat), NIGHTLY_MAC_RUNNER (the Mac mini's
     # self-hosted runner label), NIGHTLY_WIN_RUNNER; a RELEASE_* variable below, when set, comes first.
@@ -195,6 +196,8 @@ jobs:
           scripts/rust-licenses.sh ${{ matrix.target }} build/licenses/rust
       - name: package
         if: runner.os != 'Windows'
+        env:
+          PERSONAL_MAC: ${{ inputs.personal_mac && '1' || '' }}
         run: |
           set -e
           d=pkg; mkdir -p $d
@@ -217,14 +220,13 @@ jobs:
             for f in libcef.so resources.pak chrome_100_percent.pak chrome_200_percent.pak icudtl.dat v8_context_snapshot.bin; do [ -f $R/$f ] || { echo "::error::CEF runtime file $f missing from the build"; exit 1; }; cp $R/$f $d/; done
             for f in libvk_swiftshader.so libvulkan.so.1 vk_swiftshader_icd.json; do [ ! -f $R/$f ] || cp $R/$f $d/; done
             cp -r $R/locales $d/locales; strip --strip-unneeded $d/libcef.so ;;
-          # macOS: the framework from the cef crate's distribution (its OUT_DIR), and the helper apps around backplane-cef-helper (viewers/cef_mac.rs)
+          # macOS: use the same Chromium and Finder app packaging as the local build.
           darwin-*)
-            fw=$(find native/gpui/target/release/build -path '*cef-dll-sys*' -type d -name 'Chromium Embedded Framework.framework' -prune | head -1)
-            [ -n "$fw" ] || { echo "::error::Chromium Embedded Framework.framework missing from the build"; exit 1; }
-            scripts/cef-runtime-files.sh "$(dirname "$fw")" $d macos
-            scripts/cef-mac-helpers.sh $d native/gpui/target/release/backplane-cef-helper
-            # Backplane.app, which install.sh puts in ~/Applications: its program execs the client of CURRENT (scripts/mac-app.sh, deploy/mac/launcher.c)
-            scripts/mac-app.sh $d "$TAG"; codesign --verify --strict $d/Backplane.app ;;
+            if [ -n "$PERSONAL_MAC" ]; then
+              scripts/package-mac-runtime.sh native/gpui/target/release "$d" "$TAG" --personal
+            else
+              scripts/package-mac-runtime.sh native/gpui/target/release "$d" "$TAG"
+            fi ;;
           esac
           cp -r assets $d/assets
           scripts/build-kistack.sh $d/kistack   # KiStack's skills beside the hub (deploy/kistack.lock; agents/host.rs looks in <exe dir>/kistack)
@@ -307,6 +309,7 @@ jobs:
   # is plain to see, and publish needs it: no release goes out without the APK. Its artifact is named archive-android, so publish's archive-* download picks the APK and
   # AAB up. A dry run also builds the same app under a side id (dev.backplane.mobile.rel, artifact android-sideid, never published), which installs beside a phone's own app.
   android:
+    if: ${{ !inputs.personal_mac }}
     name: build android
     runs-on: ubuntu-latest
     env:
@@ -417,7 +420,7 @@ jobs:
   publish:
     needs: [build, android]
     # a tag publishes only with every job green; a dry run (workflow_dispatch) still makes its artifact when only android failed, without the APK/AAB
-    if: always() && needs.build.result == 'success' && (needs.android.result == 'success' || github.event_name == 'workflow_dispatch' || inputs.nightly)
+    if: always() && !inputs.personal_mac && needs.build.result == 'success' && (needs.android.result == 'success' || github.event_name == 'workflow_dispatch' || inputs.nightly)
     runs-on: ubuntu-latest
     permissions:
       contents: write

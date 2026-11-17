@@ -21,6 +21,34 @@ Run the install.sh one-liner above: the same layout, with the default home in `~
 
 **macOS builds are not notarized yet** (no Apple Developer ID; the app and its helpers are signed ad hoc). install.sh downloads with curl, which marks nothing as quarantined, so what it installs opens. If you unpack an archive you downloaded with a browser by hand and macOS refuses to open it, once only: right-click (or Control-click) → Open → Open; or on macOS 15+, try to open it, then System Settings → Privacy & Security → "Open Anyway"; or run `xattr -dr com.apple.quarantine ~/Applications/Backplane.app ~/.local/share/backplane`. The installer checks the archive's sha256 before it installs anything.
 
+### Personal macOS fork
+
+On an Apple Silicon Mac, install the Xcode Command Line Tools, a native Rust toolchain, CMake, Ninja, and Python 3. Use the Bun version in `deploy/bun-version`. Install `cargo-about` if you do not already have version 0.9.3.
+
+```sh
+cargo install --locked --features cli cargo-about@0.9.3
+scripts/build-personal-mac.sh
+```
+
+The script prints the path to the archive under `dist/`. The first build needs network access to fetch dependencies, including Chromium and OpenCascade. You can set `JOBS` to change the build's parallelism. Pass the printed archive path to the installer.
+
+```sh
+scripts/install-personal-mac.sh /path/to/backplane-VERSION-COMMIT-darwin-arm64-native.tar.gz
+```
+
+You can also build the archive in your fork's **Actions → release → Run workflow** menu. Select your branch and **personal_mac**. Download and unzip the **archive-darwin-arm64** artifact, then pass the archive inside it to the same installer.
+
+Open **Backplane Fork** from your Applications folder. It starts its own hub on a free local port. The hub, desktop settings, and builds are under `~/Library/Application Support/Backplane Fork`. This app uses manual updates and starts with Tailscale disabled. It can use the agent CLIs you already installed, including Codex in `~/.cargo/bin`.
+
+In **Settings → CAD**, install the pinned Backplane KiCad package from upstream. To reuse an existing copy, set **Path to KiCad’s command line** to the full path to its `bin/kicad-cli`. Keep the full runtime with that binary. On macOS, the embedded KiCad editor needs a compatible `bp.13` or later runtime.
+
+To update the fork, quit **Backplane Fork** and stop its hub before installing the new archive. Use the path below to select the fork's hub explicitly.
+
+```sh
+fork_dir="$HOME/Library/Application Support/Backplane Fork"
+"$fork_dir/backplane" hub stop --home "$fork_dir/hub"
+```
+
 ## Windows (x64, experimental)
 
 Download `backplane-<tag>-windows-x64-native.zip`, extract the **whole** archive into a folder, and run `backplane-gpui.exe`. The exe is not signed yet, so Windows SmartScreen warns the first time (see below). The first run asks **Install Backplane to %LOCALAPPDATA%\Backplane? (needed for updates)**: Install copies the release to `%LOCALAPPDATA%\Backplane\builds\<tag>`, puts the guard (`backplane.exe`, which updates, restarts and rolls back the hub) at `%LOCALAPPDATA%\Backplane`, adds **Backplane** to the Start menu and starts from there; the folder you extracted can then be deleted. Not now runs it from the extracted folder, without updates, and asks again next time. Git for Windows is needed (the hub's shell commands use its `sh`); install your agent CLIs, KiCad and FreeCAD separately (Settings → CAD finds them). Closing the window leaves the hub running.

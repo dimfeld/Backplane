@@ -14,10 +14,16 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef BACKPLANE_PERSONAL_MAC
+#define APP_NAME "Backplane Fork"
+#else
+#define APP_NAME "Backplane"
+#endif
+
 static void say(const char *msg) {
-    fprintf(stderr, "Backplane: %s\n", msg);
+    fprintf(stderr, APP_NAME ": %s\n", msg);
     CFStringRef m = CFStringCreateWithCString(NULL, msg, kCFStringEncodingUTF8);
-    if (m) { CFUserNotificationDisplayAlert(0, kCFUserNotificationStopAlertLevel, NULL, NULL, NULL, CFSTR("Backplane cannot start"), m, NULL, NULL, NULL, NULL); CFRelease(m); }
+    if (m) { CFUserNotificationDisplayAlert(0, kCFUserNotificationStopAlertLevel, NULL, NULL, NULL, CFSTR(APP_NAME " cannot start"), m, NULL, NULL, NULL, NULL); CFRelease(m); }
 }
 
 // the first line of a file, trimmed; 0 when there is none
@@ -29,13 +35,52 @@ static int first_line(const char *path, char *out, size_t n) {
     return l > 0;
 }
 
+#ifdef BACKPLANE_PERSONAL_MAC
+static int set_personal_paths(const char *home, const char *prefix) {
+    const struct { const char *key; const char *folder; } paths[] = {
+        {"BACKPLANE_HOME", "hub"},
+        {"BACKPLANE_BOTS_DIR", "hub/bots"},
+        {"XDG_CONFIG_HOME", "config"},
+        {"XDG_DATA_HOME", "data"},
+        {"XDG_CACHE_HOME", "cache"},
+    };
+    char path[PATH_MAX];
+    for (size_t i = 0; i < sizeof paths / sizeof paths[0]; ++i) {
+        int length = snprintf(path, sizeof path, "%s/%s", prefix, paths[i].folder);
+        if (length < 0 || (size_t)length >= sizeof path ||
+            setenv(paths[i].key, path, 1) != 0) return 0;
+    }
+    const char *inherited = getenv("PATH");
+    char *search = NULL;
+    if (asprintf(&search, "%s/.cargo/bin:%s/.local/bin:/opt/homebrew/bin:/usr/local/bin:%s",
+                 home, home, inherited && *inherited ? inherited : "/usr/bin:/bin:/usr/sbin:/sbin") < 0) return 0;
+    int ok = setenv("PATH", search, 1) == 0;
+    free(search);
+    return ok && setenv("BACKPLANE_GUARD_NO_DEFAULT", "1", 1) == 0 &&
+           setenv("BACKPLANE_NO_TAILSCALE", "1", 1) == 0 &&
+           setenv("BACKPLANE_NO_UPDATE", "1", 1) == 0;
+}
+#endif
+
 int main(int argc, char **argv) {
+    (void)argc;
     char raw[PATH_MAX], me[PATH_MAX]; uint32_t sz = sizeof raw;
     if (_NSGetExecutablePath(raw, &sz) != 0 || !realpath(raw, me)) { say("cannot find its own program."); return 1; }
     // me = <app>/Contents/MacOS/Backplane
     char contents[PATH_MAX]; snprintf(contents, sizeof contents, "%s", me);
     for (int i = 0; i < 2; i++) { char *s = strrchr(contents, '/'); if (s) *s = 0; }
     char prefix[PATH_MAX], file[PATH_MAX + 32];
+#ifdef BACKPLANE_PERSONAL_MAC
+    struct passwd *pw = getpwuid(getuid());
+    const char *home = getenv("HOME");
+    if (!home || !*home) home = pw ? pw->pw_dir : NULL;
+    int length = home ? snprintf(prefix, sizeof prefix, "%s/Library/Application Support/Backplane Fork", home) : -1;
+    if (length < 0 || (size_t)length >= sizeof prefix ||
+        !set_personal_paths(home, prefix) || setenv("HOME", home, 1) != 0) {
+        say("cannot set up the Backplane Fork paths.");
+        return 1;
+    }
+#else
     snprintf(file, sizeof file, "%s/Resources/prefix", contents);
     if (!first_line(file, prefix, sizeof prefix)) {
         const char *home = getenv("HOME"); struct passwd *pw = getpwuid(getuid());
@@ -43,6 +88,7 @@ int main(int argc, char **argv) {
         if (!home) { say("cannot find your home folder."); return 1; }
         snprintf(prefix, sizeof prefix, "%s/.local/share/backplane", home);
     }
+#endif
     char cur[256], msg[PATH_MAX * 2 + 200];
     snprintf(file, sizeof file, "%s/CURRENT", prefix);
     if (!first_line(file, cur, sizeof cur) || strchr(cur, '/') || cur[0] == '.') {

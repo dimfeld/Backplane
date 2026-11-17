@@ -128,7 +128,11 @@ pub fn ensure_hub(home: &Path) -> Result<(String, PathBuf)> {
         let mut cmd = match scope { Some(pre) => { let mut c = std::process::Command::new(crate::scopeprobe::program()); c.args(pre).arg(&bin); c } None => std::process::Command::new(&bin) };
         match &guarded {
             // the guard starts the hub of CURRENT and owns it from here: restarts, updates, rollback (docs/deploy.md)
-            Some((_, prefix)) => { cmd.args(["hub", "run", "--home"]).arg(home).args(["--port", &port.to_string(), "--host", "127.0.0.1", "--builds"]).arg(prefix).arg("--default").args(["--", "--foreground"]); }
+            Some((_, prefix)) => {
+                cmd.args(["hub", "run", "--home"]).arg(home).args(["--port", &port.to_string(), "--host", "127.0.0.1", "--builds"]).arg(prefix);
+                if std::env::var_os("BACKPLANE_GUARD_NO_DEFAULT").is_none() { cmd.arg("--default"); }
+                cmd.args(["--", "--foreground"]);
+            }
             None => { cmd.arg("--home").arg(home).arg("--port").arg(port.to_string()).arg("--host").arg("127.0.0.1").arg("--foreground"); }
         }
         cmd.stdin(std::process::Stdio::null()).stdout(log.try_clone()?).stderr(log.try_clone()?);

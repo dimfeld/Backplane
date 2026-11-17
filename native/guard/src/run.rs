@@ -441,8 +441,11 @@ pub fn run(o: Opts) -> i32 {
     sys::watch_stop();
     if let Some(p) = &o.pidfile { let _ = fs::write(p, format!("{}\n", std::process::id())); }
     if o.default_home { if let Some(p) = crate::store::pointer() { if let Some(dir) = p.parent() { let _ = fs::create_dir_all(dir); } let _ = fs::write(p, o.home.to_string_lossy().as_bytes()); } }
+    // A side install needs the same paths when the CLI starts its stopped guard again.
+    let side_install = std::env::var_os("BACKPLANE_GUARD_NO_DEFAULT").is_some();
+    let side_env = ["PATH", "BACKPLANE_BOTS_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME"];
     let _ = d.put("launch.json", &json!({"home": o.home, "port": o.port, "host": o.host, "builds": o.builds, "log": o.log, "pidfile": o.pidfile, "mem": o.mem, "default": o.default_home, "hubArgs": o.hub_args,
-        "env": std::env::vars().filter(|(k, _)| k.starts_with("BACKPLANE_GUARD_") || ["BACKPLANE_HTTPS_PORT", "BACKPLANE_NO_UPDATE", "BACKPLANE_AGENTS", "BACKPLANE_COPY", "BACKPLANE_SIDE_BY_SIDE"].contains(&k.as_str())).map(|(k, v)| (k, Value::String(v))).collect::<serde_json::Map<_, _>>()}).to_string());
+        "env": std::env::vars().filter(|(k, _)| k.starts_with("BACKPLANE_GUARD_") || (side_install && side_env.contains(&k.as_str())) || ["BACKPLANE_HTTPS_PORT", "BACKPLANE_NO_UPDATE", "BACKPLANE_AGENTS", "BACKPLANE_COPY", "BACKPLANE_SIDE_BY_SIDE"].contains(&k.as_str())).map(|(k, v)| (k, Value::String(v))).collect::<serde_json::Map<_, _>>()}).to_string());
     let b = o.builds.clone().map(Builds);
     let mut build = o.build.clone();
     if build.is_empty() { build = b.as_ref().map_or(String::new(), Builds::current); }
